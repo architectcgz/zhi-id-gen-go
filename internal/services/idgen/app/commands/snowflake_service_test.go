@@ -58,3 +58,42 @@ func TestSnowflakeService_SwitchesBackupWorkerOnClockBackwards(t *testing.T) {
 		t.Fatalf("worker id after switch = %v, want 2", info.WorkerID)
 	}
 }
+
+func TestSnowflakeService_GetSnowflakeInfoReportsLeaseValidity(t *testing.T) {
+	generator := domain.NewSnowflakeGenerator(1, 2, 1735689600000, nil)
+	service := NewSnowflakeService(
+		generator,
+		stubLeaseManager{
+			valid: true,
+			consumeBackup: func(_ context.Context) (int64, error) {
+				return 0, nil
+			},
+		},
+	)
+
+	info, err := service.GetSnowflakeInfo(context.Background())
+	if err != nil {
+		t.Fatalf("GetSnowflakeInfo returned error: %v", err)
+	}
+	if info.WorkerIDValid == nil || !*info.WorkerIDValid {
+		t.Fatalf("workerIdValid = %v, want true", info.WorkerIDValid)
+	}
+
+	invalidService := NewSnowflakeService(
+		generator,
+		stubLeaseManager{
+			valid: false,
+			consumeBackup: func(_ context.Context) (int64, error) {
+				return 0, nil
+			},
+		},
+	)
+
+	invalidInfo, err := invalidService.GetSnowflakeInfo(context.Background())
+	if err != nil {
+		t.Fatalf("GetSnowflakeInfo returned error: %v", err)
+	}
+	if invalidInfo.WorkerIDValid == nil || *invalidInfo.WorkerIDValid {
+		t.Fatalf("workerIdValid = %v, want false", invalidInfo.WorkerIDValid)
+	}
+}

@@ -52,6 +52,7 @@ type SegmentBuffer struct {
 	nextReady   bool
 	initialized bool
 	loadingNext bool
+	disabled    bool
 	minStep     int
 	updateTs    int64
 }
@@ -63,6 +64,9 @@ func NewSegmentBuffer(bizTag string) *SegmentBuffer {
 func (b *SegmentBuffer) InitializeCurrent(allocation SegmentAllocation) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.disabled {
+		return
+	}
 
 	b.segments[b.currentPos] = SegmentState{
 		next: allocation.StartID(),
@@ -77,6 +81,9 @@ func (b *SegmentBuffer) InitializeCurrent(allocation SegmentAllocation) {
 func (b *SegmentBuffer) StoreNext(allocation SegmentAllocation) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.disabled {
+		return
+	}
 
 	nextPos := (b.currentPos + 1) % 2
 	b.segments[nextPos] = SegmentState{
@@ -96,7 +103,7 @@ func (b *SegmentBuffer) StartLoadingNext() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if b.nextReady || b.loadingNext {
+	if b.disabled || b.nextReady || b.loadingNext {
 		return false
 	}
 	b.loadingNext = true
@@ -119,6 +126,9 @@ func (b *SegmentBuffer) NextID() (NextIDResult, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if b.disabled {
+		return NextIDResult{}, NewBizTagNotExists(b.bizTag)
+	}
 	if !b.initialized {
 		return NextIDResult{}, ErrSegmentsNotReady
 	}
@@ -180,6 +190,17 @@ func (b *SegmentBuffer) Snapshot() SegmentCacheSnapshot {
 		CurrentSegment:     snapshotSegmentState(current),
 		NextSegment:        snapshotSegmentState(next),
 	}
+}
+
+func (b *SegmentBuffer) Deactivate() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.disabled = true
+	b.initialized = false
+	b.nextReady = false
+	b.loadingNext = false
+	b.segments = [2]SegmentState{}
 }
 
 func snapshotSegmentState(segment SegmentState) SegmentStateSnapshot {

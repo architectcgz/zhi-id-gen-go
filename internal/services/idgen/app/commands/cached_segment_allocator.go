@@ -51,10 +51,26 @@ func (a *CachedSegmentAllocator) AllocateSegmentIDs(ctx context.Context, bizTag 
 }
 
 func (a *CachedSegmentAllocator) Warmup(bizTags []string) {
+	a.SyncBizTags(bizTags)
+}
+
+func (a *CachedSegmentAllocator) SyncBizTags(bizTags []string) {
+	desired := make(map[string]struct{}, len(bizTags))
+	for _, bizTag := range bizTags {
+		desired[bizTag] = struct{}{}
+	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	for _, bizTag := range bizTags {
+	for bizTag, buffer := range a.buffers {
+		if _, ok := desired[bizTag]; ok {
+			continue
+		}
+		buffer.Deactivate()
+		delete(a.buffers, bizTag)
+	}
+	for bizTag := range desired {
 		if _, exists := a.buffers[bizTag]; exists {
 			continue
 		}
@@ -96,9 +112,13 @@ func (a *CachedSegmentAllocator) getOrInitializeBuffer(ctx context.Context, bizT
 
 	allocation, err := a.repository.LoadSegmentRange(ctx, bizTag)
 	if err != nil {
+		a.removeBufferIfUninitialized(bizTag, buffer)
 		return nil, err
 	}
 	buffer.InitializeCurrent(allocation)
+	if !buffer.IsInitialized() {
+		return nil, domain.NewBizTagNotExists(bizTag)
+	}
 	return buffer, nil
 }
 
@@ -168,6 +188,20 @@ func (a *CachedSegmentAllocator) GetSegmentCacheInfo(bizTag string) (queries.Seg
 		CurrentSegment:     queries.ToSegmentStateView(snapshot.CurrentSegment),
 		NextSegment:        queries.ToSegmentStateView(snapshot.NextSegment),
 	}, true
+}
+
+func (a *CachedSegmentAllocator) removeBufferIfUninitialized(bizTag string, buffer *domain.SegmentBuffer) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	current := a.buffers[bizTag]
+	if current != buffer || current == nil {
+		return
+	}
+	if current.IsInitialized() {
+		return
+	}
+	delete(a.buffers, bizTag)
 }
 
 func boolPtr(v bool) *bool { return &v }

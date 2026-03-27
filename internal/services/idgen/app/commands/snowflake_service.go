@@ -89,11 +89,16 @@ func (s SnowflakeService) GetSnowflakeInfo(_ context.Context) (queries.Snowflake
 	workerID := int(s.generator.WorkerID())
 	datacenterID := int(s.generator.DatacenterID())
 	epoch := s.generator.Epoch()
+	var workerIDValid *bool
+	if s.lease != nil {
+		workerIDValid = boolPtr(s.lease.IsWorkerIDValid())
+	}
 
 	return queries.SnowflakeInfoView{
-		Initialized:  true,
-		WorkerID:     &workerID,
-		DatacenterID: &datacenterID,
-		Epoch:        &epoch,
+		Initialized:   true,
+		WorkerID:      &workerID,
+		DatacenterID:  &datacenterID,
+		Epoch:         &epoch,
+		WorkerIDValid: workerIDValid,
 	}, nil
 }

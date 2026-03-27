@@ -34,9 +34,10 @@ type SegmentHealthView struct {
 }
 
 type SnowflakeHealthView struct {
-	Initialized  bool `json:"initialized"`
-	WorkerID     *int `json:"workerId"`
-	DatacenterID *int `json:"datacenterId"`
+	Initialized   bool  `json:"initialized"`
+	WorkerID      *int  `json:"workerId"`
+	DatacenterID  *int  `json:"datacenterId"`
+	WorkerIDValid *bool `json:"workerIdValid,omitempty"`
 }
 
 type HealthStatusView struct {
@@ -86,7 +87,8 @@ func (s HealthQueryService) GetHealth(ctx context.Context) (HealthStatusView, er
 
 	status := "UP"
 	segmentInitialized := s.tagsReader.IsInitialized()
-	if !segmentInitialized || !snowflakeInfo.Initialized {
+	workerIDValid := snowflakeInfo.WorkerIDValid == nil || *snowflakeInfo.WorkerIDValid
+	if !segmentInitialized || !snowflakeInfo.Initialized || !workerIDValid {
 		status = "DEGRADED"
 	}
 
@@ -99,9 +101,10 @@ func (s HealthQueryService) GetHealth(ctx context.Context) (HealthStatusView, er
 			BizTagCount: len(tags),
 		},
 		Snowflake: SnowflakeHealthView{
-			Initialized:  snowflakeInfo.Initialized,
-			WorkerID:     snowflakeInfo.WorkerID,
-			DatacenterID: snowflakeInfo.DatacenterID,
+			Initialized:   snowflakeInfo.Initialized,
+			WorkerID:      snowflakeInfo.WorkerID,
+			DatacenterID:  snowflakeInfo.DatacenterID,
+			WorkerIDValid: snowflakeInfo.WorkerIDValid,
 		},
 	}, nil
 }

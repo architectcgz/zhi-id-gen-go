@@ -12,10 +12,11 @@ type SnowflakeParseInfoView struct {
 }
 
 type SnowflakeInfoView struct {
-	Initialized  bool   `json:"initialized"`
-	WorkerID     *int   `json:"workerId"`
-	DatacenterID *int   `json:"datacenterId"`
-	Epoch        *int64 `json:"epoch"`
+	Initialized   bool   `json:"initialized"`
+	WorkerID      *int   `json:"workerId"`
+	DatacenterID  *int   `json:"datacenterId"`
+	Epoch         *int64 `json:"epoch"`
+	WorkerIDValid *bool  `json:"workerIdValid,omitempty"`
 }
 
 type SnowflakeQueryPort interface {

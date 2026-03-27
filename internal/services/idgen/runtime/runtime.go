@@ -94,7 +94,7 @@ func syncSegmentTags(ctx context.Context, reader ports.BizTagReader, allocator *
 	if err != nil {
 		return err
 	}
-	allocator.Warmup(bizTags)
+	allocator.SyncBizTags(bizTags)
 	return nil
 }
 

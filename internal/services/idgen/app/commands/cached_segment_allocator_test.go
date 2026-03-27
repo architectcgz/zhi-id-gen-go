@@ -80,3 +80,51 @@ func TestCachedSegmentAllocator_WarmupMarksBizTagAsCachedBeforeFirstAllocation(t
 		t.Fatalf("bufferInitialized = %v, want false", info.BufferInitialized)
 	}
 }
+
+func TestCachedSegmentAllocator_SyncBizTagsRemovesDeletedTagsFromCacheView(t *testing.T) {
+	allocator := NewCachedSegmentAllocator(
+		stubSegmentRangeRepository{
+			loadRange: func(_ context.Context, bizTag string) (domain.SegmentAllocation, error) {
+				return domain.SegmentAllocation{BizTag: bizTag, MaxID: 10, Step: 10}, nil
+			},
+		},
+		func(fn func()) { fn() },
+	)
+
+	allocator.Warmup([]string{"order", "user"})
+	allocator.SyncBizTags([]string{"order"})
+
+	tags, err := allocator.ListBizTags(context.Background())
+	if err != nil {
+		t.Fatalf("ListBizTags returned error: %v", err)
+	}
+	if len(tags) != 1 || tags[0] != "order" {
+		t.Fatalf("tags = %v, want [order]", tags)
+	}
+	if _, ok := allocator.GetSegmentCacheInfo("user"); ok {
+		t.Fatal("deleted bizTag should not remain in cache view")
+	}
+}
+
+func TestCachedSegmentAllocator_DoesNotCacheUnknownBizTagAfterLoadFailure(t *testing.T) {
+	allocator := NewCachedSegmentAllocator(
+		stubSegmentRangeRepository{
+			loadRange: func(_ context.Context, bizTag string) (domain.SegmentAllocation, error) {
+				return domain.SegmentAllocation{}, domain.NewBizTagNotExists(bizTag)
+			},
+		},
+		func(fn func()) { fn() },
+	)
+
+	if _, err := allocator.AllocateSegmentIDs(context.Background(), "missing", 1); err == nil {
+		t.Fatal("AllocateSegmentIDs returned nil error, want bizTag not exists")
+	}
+
+	tags, err := allocator.ListBizTags(context.Background())
+	if err != nil {
+		t.Fatalf("ListBizTags returned error: %v", err)
+	}
+	if len(tags) != 0 {
+		t.Fatalf("tags = %v, want empty", tags)
+	}
+}

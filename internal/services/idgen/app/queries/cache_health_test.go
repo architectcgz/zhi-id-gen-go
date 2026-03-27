@@ -106,6 +106,39 @@ func TestHealthQueryService_GetHealth(t *testing.T) {
 	}
 }
 
+func TestHealthQueryService_GetHealthDegradesWhenSnowflakeLeaseIsInvalid(t *testing.T) {
+	service := NewHealthQueryService(
+		"id-generator-service",
+		stubHealthTagsReader{
+			listBizTags: func(_ context.Context) ([]string, error) {
+				return []string{"order"}, nil
+			},
+			initialized: func() bool { return true },
+		},
+		stubHealthSnowflakeInfo{
+			getInfo: func(_ context.Context) (SnowflakeInfoView, error) {
+				return SnowflakeInfoView{
+					Initialized:   true,
+					WorkerID:      intPtr(3),
+					DatacenterID:  intPtr(1),
+					WorkerIDValid: boolQueryPtr(false),
+				}, nil
+			},
+		},
+	)
+
+	got, err := service.GetHealth(context.Background())
+	if err != nil {
+		t.Fatalf("GetHealth returned error: %v", err)
+	}
+	if got.Status != "DEGRADED" {
+		t.Fatalf("status = %s, want DEGRADED", got.Status)
+	}
+	if got.Snowflake.WorkerIDValid == nil || *got.Snowflake.WorkerIDValid {
+		t.Fatalf("workerIdValid = %v, want false", got.Snowflake.WorkerIDValid)
+	}
+}
+
 func TestSegmentCacheQueryService_GetCacheInfoReturnsSegmentInitializationWhenNotCached(t *testing.T) {
 	service := NewSegmentCacheQueryService(
 		stubSegmentCacheObserver{
