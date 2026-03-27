@@ -52,3 +52,31 @@ func TestCachedSegmentAllocator_CachesCurrentSegmentAndPreloadsNext(t *testing.T
 		t.Fatalf("loadRange calls = %d, want 3", calls)
 	}
 }
+
+func TestCachedSegmentAllocator_WarmupMarksBizTagAsCachedBeforeFirstAllocation(t *testing.T) {
+	allocator := NewCachedSegmentAllocator(
+		stubSegmentRangeRepository{
+			loadRange: func(_ context.Context, _ string) (domain.SegmentAllocation, error) {
+				t.Fatal("LoadSegmentRange should not be called during warmup snapshot")
+				return domain.SegmentAllocation{}, nil
+			},
+		},
+		func(fn func()) { fn() },
+	)
+
+	allocator.Warmup([]string{"order"})
+
+	info, ok := allocator.GetSegmentCacheInfo("order")
+	if !ok {
+		t.Fatal("expected warmup bizTag to exist in cache")
+	}
+	if !allocator.IsInitialized() {
+		t.Fatal("allocator should be initialized after warmup")
+	}
+	if !info.Cached {
+		t.Fatal("cached = false, want true")
+	}
+	if info.BufferInitialized == nil || *info.BufferInitialized {
+		t.Fatalf("bufferInitialized = %v, want false", info.BufferInitialized)
+	}
+}

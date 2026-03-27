@@ -8,6 +8,13 @@ import (
 	"testing"
 )
 
+func TestDefaultConfig_UsesServerDefaultAddress(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.ServerURL != "http://localhost:8088" {
+		t.Fatalf("ServerURL = %s, want http://localhost:8088", cfg.ServerURL)
+	}
+}
+
 func TestClient_DirectRequests(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

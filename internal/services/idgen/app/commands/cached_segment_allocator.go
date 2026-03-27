@@ -14,8 +14,9 @@ type CachedSegmentAllocator struct {
 	repository ports.SegmentRangeRepository
 	launch     func(func())
 
-	mu      sync.Mutex
-	buffers map[string]*domain.SegmentBuffer
+	mu          sync.Mutex
+	buffers     map[string]*domain.SegmentBuffer
+	initialized bool
 }
 
 func NewCachedSegmentAllocator(repository ports.SegmentRangeRepository, launch func(func())) *CachedSegmentAllocator {
@@ -46,6 +47,25 @@ func (a *CachedSegmentAllocator) AllocateSegmentIDs(ctx context.Context, bizTag 
 	}
 
 	return ids, nil
+}
+
+func (a *CachedSegmentAllocator) Warmup(bizTags []string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	for _, bizTag := range bizTags {
+		if _, exists := a.buffers[bizTag]; exists {
+			continue
+		}
+		a.buffers[bizTag] = domain.NewSegmentBuffer(bizTag)
+	}
+	a.initialized = true
+}
+
+func (a *CachedSegmentAllocator) IsInitialized() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.initialized
 }
 
 func (a *CachedSegmentAllocator) getOrInitializeBuffer(ctx context.Context, bizTag string) (*domain.SegmentBuffer, error) {
@@ -124,7 +144,7 @@ func (a *CachedSegmentAllocator) GetSegmentCacheInfo(bizTag string) (queries.Seg
 	snapshot := buffer.Snapshot()
 	return queries.SegmentCacheInfoView{
 		BizTag:             snapshot.BizTag,
-		Initialized:        true,
+		Initialized:        a.IsInitialized(),
 		Cached:             true,
 		BufferInitialized:  boolPtr(snapshot.Initialized),
 		CurrentPos:         intPtr(snapshot.CurrentPos),

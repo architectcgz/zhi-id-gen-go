@@ -38,23 +38,15 @@ zhi-id-gen-go/
 
 ## 当前状态
 
-当前仓库已完成：
+当前仓库已具备可运行首版：
 
-- 独立 Git 仓库初始化
-- 远程仓库 `origin` 绑定
-- Go 模块初始化
-- 基于服务模板裁剪的基础骨架
-- 统一响应结构定义
-- 兼容版数据库 schema 初始化
-- Go 风格文档初稿
-- Segment 双缓冲缓存发号
-- Snowflake 静态 Worker + DB Worker ID 模式首版
-
-后续会按以下顺序推进：
-
-1. Segment 缓存观测与更完整兼容接口
-2. Go SDK
-3. Docker、示例、文档与兼容测试
+- Segment 模式双缓冲缓存发号
+- Segment 缓存观测接口 `/api/v1/id/cache/{bizTag}`
+- Snowflake 静态 Worker 模式
+- Snowflake DB Worker ID 抢占、续租、释放、备用切换
+- Java 风格 `ApiResponse` 与主要错误码映射
+- Go SDK 首版
+- 兼容版 PostgreSQL schema 与基础单元测试
 
 ## 本地运行
 
@@ -81,7 +73,7 @@ go run ./cmd/id-generator-server
 
 当前运行需要：
 
-- `DATABASE_URL`：Segment 模式需要 PostgreSQL
+- `DATABASE_URL`：当前服务启动必需，用于 Segment 和 DB Worker ID 模式
 
 当前 Snowflake 支持：
 
@@ -97,3 +89,42 @@ go run ./cmd/id-generator-server
 - `WORKER_ID >= 0` 时走静态 Worker 模式
 - `WORKER_ID = -1` 时走 `worker_id_alloc` 自动抢占模式
 - 当前已支持主用 Worker ID 续租、备用 Worker ID 预分配与时钟回拨切换
+
+## Go SDK
+
+默认地址与服务默认端口一致，指向 `http://localhost:8088`。
+
+```go
+package main
+
+import (
+    "fmt"
+
+    "github.com/architectcgz/zhi-id-gen-go/pkg/client"
+)
+
+func main() {
+    c := client.New(client.DefaultConfig())
+    defer c.Close()
+
+    snowflakeID, _ := c.NextSnowflakeID()
+    orderID, _ := c.NextSegmentID("order")
+
+    fmt.Println(snowflakeID, orderID)
+}
+```
+
+如需本地缓冲：
+
+```go
+c := client.New(client.Config{
+    ServerURL:       "http://localhost:8088",
+    BufferEnabled:   true,
+    BufferSize:      100,
+    RefillThreshold: 20,
+    BatchFetchSize:  50,
+    AsyncRefill:     true,
+})
+```
+
+完整示例见 [examples/go-client/main.go](./examples/go-client/main.go)。

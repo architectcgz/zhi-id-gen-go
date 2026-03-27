@@ -128,4 +128,32 @@ func TestSegmentCacheQueryService_GetCacheInfoReturnsSegmentInitializationWhenNo
 	}
 }
 
+func TestSegmentCacheQueryService_GetCacheInfoReturnsWarmupCacheSnapshot(t *testing.T) {
+	service := NewSegmentCacheQueryService(
+		stubSegmentCacheObserver{
+			getSnapshot: func(_ string) (SegmentCacheInfoView, bool) {
+				return SegmentCacheInfoView{
+					BizTag:            "order",
+					Cached:            true,
+					BufferInitialized: boolQueryPtr(false),
+				}, true
+			},
+		},
+		func() bool { return true },
+	)
+
+	got, err := service.GetCacheInfo(context.Background(), "order")
+	if err != nil {
+		t.Fatalf("GetCacheInfo returned error: %v", err)
+	}
+	if !got.Initialized {
+		t.Fatal("initialized = false, want true")
+	}
+	if got.BufferInitialized == nil || *got.BufferInitialized {
+		t.Fatalf("bufferInitialized = %v, want false", got.BufferInitialized)
+	}
+}
+
 func intPtr(v int) *int { return &v }
+
+func boolQueryPtr(v bool) *bool { return &v }

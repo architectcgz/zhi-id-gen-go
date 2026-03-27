@@ -15,6 +15,19 @@ import (
 	transporthttp "github.com/architectcgz/zhi-id-gen-go/internal/services/idgen/transport/http"
 )
 
+type healthTagsReaderAdapter struct {
+	list        func(ctx context.Context) ([]string, error)
+	initialized func() bool
+}
+
+func (a healthTagsReaderAdapter) ListBizTags(ctx context.Context) ([]string, error) {
+	return a.list(ctx)
+}
+
+func (a healthTagsReaderAdapter) IsInitialized() bool {
+	return a.initialized()
+}
+
 func Build(app *bootstrap.App) (bootstrap.RuntimeOptions, error) {
 	if app.DB == nil {
 		return bootstrap.RuntimeOptions{}, errors.New("DATABASE_URL is required for id-generator runtime")
@@ -22,12 +35,20 @@ func Build(app *bootstrap.App) (bootstrap.RuntimeOptions, error) {
 
 	segmentRepository := segmentpostgres.NewSegmentRepository(app.DB)
 	segmentAllocator := commands.NewCachedSegmentAllocator(segmentRepository, nil)
+	bizTags, err := segmentRepository.ListBizTags(context.Background())
+	if err != nil {
+		return bootstrap.RuntimeOptions{}, err
+	}
+	segmentAllocator.Warmup(bizTags)
 	snowflakeService, closeFn, err := buildSnowflakeService(app)
 	if err != nil {
 		return bootstrap.RuntimeOptions{}, err
 	}
-	healthQuery := queries.NewHealthQueryService(app.Config.ServiceName, segmentRepository, snowflakeService)
-	cacheQuery := queries.NewSegmentCacheQueryService(segmentAllocator, segmentRepository.IsInitialized)
+	healthQuery := queries.NewHealthQueryService(app.Config.ServiceName, healthTagsReaderAdapter{
+		list:        segmentRepository.ListBizTags,
+		initialized: segmentAllocator.IsInitialized,
+	}, snowflakeService)
+	cacheQuery := queries.NewSegmentCacheQueryService(segmentAllocator, segmentAllocator.IsInitialized)
 	handler := transporthttp.NewHandler(
 		healthQuery,
 		commands.NewSegmentCommandService(segmentAllocator),

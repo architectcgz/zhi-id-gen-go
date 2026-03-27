@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -28,7 +29,7 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		ServerURL:       "http://localhost:8011",
+		ServerURL:       "http://localhost:8088",
 		ConnectTimeout:  5 * time.Second,
 		ReadTimeout:     5 * time.Second,
 		MaxRetries:      3,
@@ -122,6 +123,7 @@ func New(cfg Config) *Client {
 		httpClient: &http.Client{
 			Timeout: cfg.ReadTimeout,
 			Transport: &http.Transport{
+				DialContext:           (&net.Dialer{Timeout: cfg.ConnectTimeout}).DialContext,
 				ResponseHeaderTimeout: cfg.ReadTimeout,
 			},
 		},
