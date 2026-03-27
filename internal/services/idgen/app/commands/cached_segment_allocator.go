@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 
 	"github.com/architectcgz/zhi-id-gen-go/internal/services/idgen/app/queries"
@@ -66,6 +67,18 @@ func (a *CachedSegmentAllocator) IsInitialized() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.initialized
+}
+
+func (a *CachedSegmentAllocator) ListBizTags(_ context.Context) ([]string, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	tags := make([]string, 0, len(a.buffers))
+	for bizTag := range a.buffers {
+		tags = append(tags, bizTag)
+	}
+	sort.Strings(tags)
+	return tags, nil
 }
 
 func (a *CachedSegmentAllocator) getOrInitializeBuffer(ctx context.Context, bizTag string) (*domain.SegmentBuffer, error) {

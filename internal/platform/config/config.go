@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	HTTPAddress string
-	ServiceName string
-	DatabaseURL string
-	Snowflake   SnowflakeConfig
+	HTTPAddress               string
+	ServiceName               string
+	DatabaseURL               string
+	SegmentTagRefreshInterval time.Duration
+	Snowflake                 SnowflakeConfig
 }
 
 type SnowflakeConfig struct {
@@ -29,9 +30,10 @@ func Load(serviceName string) Config {
 	}
 
 	return Config{
-		HTTPAddress: addr,
-		ServiceName: serviceName,
-		DatabaseURL: os.Getenv("DATABASE_URL"),
+		HTTPAddress:               addr,
+		ServiceName:               serviceName,
+		DatabaseURL:               os.Getenv("DATABASE_URL"),
+		SegmentTagRefreshInterval: parseDuration("SEGMENT_TAG_REFRESH_INTERVAL", 30*time.Second),
 		Snowflake: SnowflakeConfig{
 			WorkerID:              getEnvInt64("WORKER_ID", -1),
 			DatacenterID:          getEnvInt64("DATACENTER_ID", 0),
